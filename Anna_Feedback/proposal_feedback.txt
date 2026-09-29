@@ -1,0 +1,30 @@
+You will need to email me when you have changed your survey for me to post on Piazza.
+
+Disclaimer: in the process of constructing feedback, I recorded my audio and got AI to rephrase my feedback in a concise, clear manner so that I can mark faster + you get more detailed feedback. I did not run any of the assignments through AI.
+
+Model selection
+You mention using adjusted R-squared to compare different models. Adjusted R-squared is not built as a formal model selection criterion, unlike AIC, BIC, or LASSO. Please use one of these instead.
+
+Research question 2
+Research question 2 compares students who skip both lecture and tutorial against students who do not skip both. I understand the reasoning behind this grouping. A student might attend lectures but skip tutorials because they find lectures more valuable, or the reverse if the TA is stronger than the lecturer. That said, grouping by "skips both" versus "does not skip both" may combine different skipping patterns into one group in a way that obscures what is actually driving the effect. Please reconsider how you define these groups, or consider a design that accounts for lecture and tutorial attendance separately rather than combining them into a single comparison.
+
+Research questions 1 and 3
+RQ1 uses simple linear regression, and RQ3 uses multiple linear regression with a set of covariates that already includes the variable from RQ1. If an effect looks weaker in the multiple regression model, that would already tell you the variable is not that strong once other predictors are accounted for. RQ1 and RQ3 are testing very similar things, so there is no need for simple linear regression alongside multiple linear regression. Please reconsider RQ1.
+
+(-0.05 due to research questions)
+
+Questionnaire: ranges vs. numbers
+Please ask for exact numbers instead of ranges wherever you currently give a range, including hours spent on assignments, hours in paid work, and number of courses taken. The ranges you currently use are quite wide. The same applies to your percentage questions. Ask respondents to enter the percentage itself rather than selecting from a range. More specific answers give you better data for your analysis.
+
+Likert scale
+Your agreement questions use a 1 to 5 scale. Please consider extending this to 1 to 7 by adding "slightly agree" and "slightly disagree."
+
+(-0.1 due to questionnaire design)
+
+Verdict:
+0.85/1
+Late marks:
+-0.75
+Bonus marks (for everyone besides Qiwen):
++0.5
+0.6/1
