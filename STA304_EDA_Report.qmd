@@ -1,0 +1,319 @@
+---
+title: "STA304 Exploratory Data Analysis: Workload and AI Use in Class Attendance"
+author:
+  - name: "Qiwen Lu"
+  - name: "Tanush Lahir"
+  - name: "Gurnoor Sandhu"
+  - name: "Harraj Singh Raina"
+  - name: "Tharun Uthayabaskar"
+date: "October 23, 2026"
+format:
+  pdf:
+    keep-tex: true
+    fontsize: 11pt
+    geometry: margin=1in
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+library(tidyverse)
+library(easystats)
+library(knitr)
+```
+
+```{r}
+#| label: load
+# Read the data (the csv must be in the same folder as this .qmd file)
+df <- read.csv("AI_Attendance_Survey_Clean.csv")
+```
+
+```{r}
+#| label: clean
+# Drop the student ID (identifier only, not an analysis variable),
+# turn the program code into a labelled factor (codes from the codebook),
+# and create a Yes/No variable for whether the student has any paid work.
+df <- df |>
+  select(-studentID) |>
+  mutate(
+    program_f = factor(program, levels = 1:4,
+                       labels = c("Statistics", "Computer Science",
+                                  "Mathematics", "Other")),
+    paid_f = factor(paid_work_hrs > 0, levels = c(FALSE, TRUE),
+                    labels = c("No", "Yes"))
+  )
+
+# Readable names for the report (new name = old name)
+labels <- c(
+  "Weekly coursework hours"                       = "coursework_hrs",
+  "Number of courses"                             = "n_courses",
+  "Weekly paid-work hours"                        = "paid_work_hrs",
+  "Lectures skipped (%)"                          = "lecture_skip_pct",
+  "Tutorials skipped (%)"                         = "tutorial_skip_pct",
+  "Skipped lectures partly for AI (%)"            = "lecture_skip_ai_pct",
+  "Skipped tutorials partly for AI (%)"           = "tutorial_skip_ai_pct",
+  "Agreement that AI replaces attendance (1-7)"   = "ai_replace_agree"
+)
+df_lab <- df |> rename(all_of(labels))
+```
+
+# 1. Data and Usability
+
+The data come from a survey of $n = 59$ students about their workload, how
+many of their lectures and tutorials they skip, and what share of the classes
+they skipped were skipped partly to use AI tools instead. The file loads
+without problems and there are no duplicate respondents (the codebook states
+that 3 repeat submissions were already removed).
+
+The main data-quality issue is **missing values**, and according to the
+codebook they are not mistakes. The two "skipped partly for AI" questions only
+apply to students who skipped something: 14 of the 15 missing lecture answers
+come from students who skipped no lectures, and 13 of the 14 missing tutorial
+answers come from students who skipped no tutorials (the other missing answers
+are one blank answer and one student with no tutorials). So analyses using
+these variables only include students who skipped some classes ($n = 44$ for
+lectures). Percentages are bounded between 0 and 100, and the agreement item
+is a 1-7 Likert scale (ordinal); as in the course examples, it is treated as
+quantitative.
+
+# 2. Summary Statistics
+
+```{r}
+#| label: summary-quant
+summ <- datawizard::describe_distribution(
+  df_lab, select = names(labels),
+  centrality = c("mean", "median")
+) |>
+  select(-any_of(c("Skewness", "Kurtosis", "MAD"))) |>
+  rename(Missing = n_Missing)
+
+kable(as.data.frame(summ), digits = 2,
+      caption = "Summary statistics for all quantitative variables.")
+```
+
+The percentages of lectures and tutorials skipped are **right-skewed**: the
+mean is clearly larger than the median (e.g. lectures skipped: mean 22.0% vs.
+median 10%), and the large SDs show wide spread between students. Weekly
+paid-work hours are 0 for more than half of the students (median 0) but reach
+35 for one student, and one student reports 10 courses while the typical value
+is 5. Among the 44 students who skipped lectures and answered the AI question,
+on average about 44% of their skipped lectures were skipped partly to use AI
+(median 50%), with a very wide spread (SD about 39%). Because mean and median
+differ for several variables, these variables should not be assumed to be
+symmetric or Gaussian.
+
+```{r}
+#| label: freq
+#| results: asis
+# Categorical variables: program, and whether the student has any paid work
+df_cat <- df |>
+  transmute("Program" = program_f, "Has paid work" = paid_f)
+
+datawizard::data_tabulate(df_cat, select = c("Program", "Has paid work")) |>
+  print_md()
+```
+
+Table 2 shows that more than half of the respondents are in Statistics (54%),
+and the "Other" program has only 3 students, so any comparison involving it is
+very uncertain. About 70% of students report no paid work.
+
+The minimum and maximum columns show a few extreme values: one student reports
+35 weekly paid-work hours and one student reports 10 courses, while the typical
+values are 0 and 5. The codebook notes that these values are unusual but
+plausible, so they are kept in the analysis.
+
+# 3. Plots and Tables
+
+## 3.1 Do students with paid work skip more lectures?
+
+```{r}
+#| label: box-paid
+#| fig-height: 3.8
+#| fig-cap: "Percentage of lectures skipped by whether the student has paid work. The diamond is the mean. Students with paid work have a higher mean (about 30% vs. 18%) and median (15% vs. 10%), but the boxes overlap a lot, so the difference may be small."
+ggplot(df, aes(x = paid_f, y = lecture_skip_pct, fill = paid_f)) +
+  geom_boxplot(show.legend = FALSE) +
+  stat_summary(fun = mean, geom = "point", shape = 23, size = 3,
+               fill = "white", show.legend = FALSE) +
+  scale_fill_manual(values = c("#FF6666", "#6699FF")) +
+  labs(x = "Has paid work", y = "Percentage of lectures skipped (%)") +
+  see::theme_modern()
+```
+
+## 3.2 Does skipping differ by program?
+
+```{r}
+#| label: box-prog
+#| fig-height: 3.8
+#| fig-cap: "Percentage of lectures skipped by program. The medians are similar (about 10%), but Computer Science is more spread out than Mathematics and Other. The Other program has only 3 students, so its box is not reliable."
+ggplot(df, aes(x = program_f, y = lecture_skip_pct, fill = program_f)) +
+  geom_boxplot(show.legend = FALSE) +
+    labs(x = "Program", y = "Percentage of lectures skipped (%)") +
+  scale_x_discrete(labels = c(
+    "Statistics", "Computer\nScience", "Mathematics", "Other"
+  )) +
+  see::theme_modern()
+```
+
+```{r}
+#| label: tab-cross
+#| results: asis
+datawizard::data_tabulate(df_cat, select = "Program", by = "Has paid work",
+                          proportions = "row") |>
+  print_md()
+```
+
+Table 3. Program by paid-work status (row percentages). Percentages are calculated within each program. This table is descriptive and does not test whether program and paid-work status are associated. Interpret the “Other” category cautiously because it includes only three students.
+
+Figures 1 and 2 show several observations beyond the upper whiskers. These are potential outliers by the boxplot rule, but their reported percentages fall within the possible 0% to 100% range. We retained them for the analyses.
+
+## 3.3 Is agreement that AI can replace attendance related to skipping lectures for AI?
+
+```{r}
+#| label: scatter
+#| fig-height: 3.8
+#| fig-cap: "Agreement that AI can replace attendance (1-7) versus the percentage of skipped lectures that were skipped partly to use AI (44 students who skipped lectures). Darker points mean several students gave the same answer. The fitted line slopes upward: students who skipped more lectures for AI also agree more."
+ggplot(df, aes(x = lecture_skip_ai_pct, y = ai_replace_agree)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", formula = y ~ x) +
+  labs(x = "Skipped lectures partly for AI (%)",
+       y = "Agreement that AI can\nreplace attendance (1-7)") +
+  see::theme_modern()
+```
+## 3.4 Is weekly coursework related to AI-related lecture skipping?
+
+```{r}
+#| label: workload-ai-plot
+#| fig-height: 3.8
+#| fig-cap: "Weekly coursework hours versus the percentage of skipped lectures partly attributed to AI among the 44 students with a valid response to that question. The fitted line summarizes the association."
+ggplot(df, aes(x = coursework_hrs, y = lecture_skip_ai_pct)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", formula = y ~ x) +
+  labs(
+    x = "Weekly coursework hours",
+    y = "Percentage of skipped lectures partly for AI (%)"
+  ) +
+  see::theme_modern()
+```
+# 4. Checking Model Assumptions
+
+```{r}
+#| label: check-paid
+#| fig-width: 10
+#| out-width: 100%
+#| fig-height: 7.5
+#| fig-cap: "Assumption checks for the two-sample t-test of lectures skipped by paid work: normality of residuals (QQ plot and density) and homogeneity of variance."
+m_paid <- lm(lecture_skip_pct ~ paid_f, data = df)
+check_model(m_paid, check = c("qq", "normality", "homogeneity"))
+```
+
+**Two-sample t-test (lectures skipped by paid work).** The residuals are
+right-skewed (most students skip 0-30% of lectures but a few skip close to
+100%), so the normality assumption appears to be **violated**. The two groups
+have a similar spread (SD about 31% and 26%), so the equal variance assumption
+looks reasonable. As instructed for this course, we note the violation and
+proceed with the t-test.
+
+```{r}
+#| label: check-prog
+#| fig-width: 10
+#| out-width: 100%
+#| fig-height: 7.5
+#| fig-cap: "Assumption checks for the ANOVA of lectures skipped by program: normality of residuals (QQ plot and density) and homogeneity of variance."
+m_aov <- lm(lecture_skip_pct ~ program_f, data = df)
+check_model(m_aov, check = c("qq", "normality", "homogeneity"))
+```
+
+**One-way ANOVA (program).** The residuals are right-skewed (many students skip
+0-10% while a few skip close to 100%), so normality appears to be **violated**.
+In the homogeneity panel the reference line slopes upward instead of being
+flat, so the equal variance assumption also appears to be **violated**
+(Computer Science is more spread out than the other programs). We proceed
+anyway, keeping in mind the Other program has only 3 students.
+
+```{r} 
+#| label: check-reg
+#| fig-width: 10
+#| out-width: 100%
+#| fig-height: 7.5
+#| fig-cap: "Assumption checks for the regression of agreement on the percentage of skipped lectures that were skipped partly for AI: linearity, homogeneity of variance, and normality of residuals."
+m_reg <- lm(ai_replace_agree ~ lecture_skip_ai_pct, data = df)
+check_model(m_reg, check = c("qq", "normality", "linearity", "homogeneity"))
+```
+
+**Linear regression (agreement vs. skipping lectures for AI).** In Figure 6 the
+reference lines in the linearity and homogeneity panels are roughly flat, and
+the QQ dots stay close to the line, so these assumptions look reasonable. The
+residual density is a little flatter than the normal curve, which is expected
+because the response is a whole number from 1 to 7, so normality is only
+approximate. We proceed as if the assumptions hold.
+```{r}
+#| label: check-workload-ai
+#| fig-width: 10
+#| out-width: 100%
+#| fig-height: 7.5
+#| fig-cap: "Assumption checks for the regression of the AI-related percentage of skipped lectures on weekly coursework hours: linearity, homogeneity of variance, and normality of residuals."
+m_workload_ai <- lm(lecture_skip_ai_pct ~ coursework_hrs, data = df)
+check_model(
+  m_workload_ai,
+  check = c("qq", "normality", "linearity", "homogeneity")
+)
+```
+Linear regression (AI-related lecture skipping vs. weekly coursework hours). The residual plots show some departures from the reference lines for linearity and homogeneity of variance, so these assumptions may not be fully satisfied. The QQ plot and residual density show clear departures from normality. We note these limitations and proceed with the regression, interpreting the results cautiously.
+
+# 5. Statistical Tests
+
+**Two-sample t-test: lectures skipped by paid work.**
+
+```{r}
+#| label: ttest
+t_res <- t.test(lecture_skip_pct ~ paid_f, data = df)
+report::report(t_res)
+```
+
+Students with paid work skipped about 11 percentage points more lectures on
+average than students without paid work (about 30% vs. 18%), but the difference
+is not statistically significant ($t(27.9) = -1.37$, $p = 0.18$), so we cannot
+conclude that paid work is related to lecture skipping.
+
+**One-way ANOVA: lectures skipped by program.**
+
+```{r}
+#| label: anova
+report::report(aov(lecture_skip_pct ~ program_f, data = df))
+```
+
+There is no significant difference in lectures skipped across programs
+($F = 1.00$, $p = 0.40$), so we do not conclude that programs differ.
+
+**Linear regression: agreement ~ skipped lectures partly for AI.**
+
+```{r}
+#| label: reg
+report::report(m_reg)
+```
+
+Among students who skipped lectures, there is a significant **positive**
+relationship: each additional 10 percentage points of skipped lectures that
+were skipped partly for AI goes with about a 0.24-point higher agreement that
+AI can replace attendance ($p < 0.001$, $r \approx 0.54$). This is an
+association, not evidence that one causes the other.
+
+**Linear regression: AI-related lecture skipping and weekly coursework hours.**
+
+```{r}
+#| label: test-workload-ai
+report::report(m_workload_ai)
+```
+Among the 44 students with a valid response to the AI-related lecture-skipping question, weekly coursework hours had a positive but not statistically significant association with the percentage of skipped lectures partly attributed to AI (slope = 0.91 percentage points per additional coursework hour, 95% CI [-0.67, 2.49], t(42) = 1.17, p = .250; R² = .03). We do not find evidence of a linear association in this sample.
+
+# Appendix: Code
+
+```{r}
+#| label: appendix
+#| ref.label: [setup, load, clean, summary-quant, freq, box-paid, box-prog, tab-cross, scatter, workload-ai-plot, check-paid, check-prog, check-reg, check-workload-ai, ttest, anova, reg, test-workload-ai]
+#| echo: true
+#| eval: false
+```
